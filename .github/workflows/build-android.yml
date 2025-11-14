@@ -1,10 +1,10 @@
-name: Build Universal libsing-box.so (Android)
+name: Build Sing-Box AAR (ARM64)
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-android:
+  build-aar:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,44 +24,46 @@ jobs:
           wget https://dl.google.com/android/repository/android-ndk-r26c-linux.zip
           unzip android-ndk-r26c-linux.zip
 
-      - name: Build for all architectures
+      - name: Build libsing-box.so (arm64)
         run: |
           export ANDROID_NDK_HOME=$PWD/android-ndk-r26c
           export PATH=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH
 
-          mkdir out
+          mkdir -p aar/jni/arm64-v8a
 
-          ### ARMv7
-          GOOS=android GOARCH=arm CGO_ENABLED=1 \
-          CC=armv7a-linux-androideabi21-clang \
-          go build -buildmode=c-shared -tags with_quic,with_utls \
-            -o out/libsing-box-arm.so
-
-          ### ARM64
-          GOOS=android GOARCH=arm64 CGO_ENABLED=1 \
+          GOOS=android \
+          GOARCH=arm64 \
+          CGO_ENABLED=1 \
           CC=aarch64-linux-android21-clang \
-          go build -buildmode=c-shared -tags with_quic,with_utls \
-            -o out/libsing-box-arm64.so
+          go build \
+            -buildmode=c-shared \
+            -tags with_quic,with_utls \
+            -o aar/jni/arm64-v8a/libsing-box.so
 
-          ### x86
-          GOOS=android GOARCH=386 CGO_ENABLED=1 \
-          CC=i686-linux-android21-clang \
-          go build -buildmode=c-shared -tags with_quic,with_utls \
-            -o out/libsing-box-x86.so
-
-          ### x86_64
-          GOOS=android GOARCH=amd64 CGO_ENABLED=1 \
-          CC=x86_64-linux-android21-clang \
-          go build -buildmode=c-shared -tags with_quic,with_utls \
-            -o out/libsing-box-x86_64.so
-
-      - name: Create universal archive
+      - name: Prepare AAR structure
         run: |
-          cd out
-          zip -r ../libsing-box-universal.zip .
+          mkdir -p aar/manifest
+          mkdir -p aar/classes
+          mkdir -p aar/R
+          
+          # пустой AndroidManifest, AAR требует его обязательного наличия
+          cat > aar/AndroidManifest.xml <<EOF
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.singbox.stub" />
+          EOF
+          
+          # пустой classes.jar нужен для корректного AAR
+          touch empty.txt
+          zip -j aar/classes.jar empty.txt
+          rm empty.txt
 
-      - name: Upload Artifact
+      - name: Build AAR
+        run: |
+          cd aar
+          zip -r ../sing-box-arm64.aar .
+
+      - name: Upload AAR
         uses: actions/upload-artifact@v3
         with:
-          name: libsing-box-universal
-          path: libsing-box-universal.zip
+          name: sing-box-arm64
+          path: sing-box-arm64.aar
